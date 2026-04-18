@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --color-zinc-950: #09090b;
+  --color-zinc-900: #18181b;
+  --color-zinc-800: #27272a;
+  
+  --color-blue-500: #3b82f6;
+  --color-blue-600: #2563eb;
+  
+  --color-emerald-500: #10b981;
+  --color-amber-500: #f59e0b;
+  --color-rose-600: #e11d48;
+}
+
+/* Base styles for the dark mode forensic aesthetic */
+body {
+  background-color: var(--color-zinc-950);
+  color: #e4e4e7;
+}
+
+/* Glassmorphism utility for cards */
+.glass-card {
+  background-color: rgba(24, 24, 27, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(39, 39, 42, 0.5);
+  border-radius: 0.75rem;
+  transition: all 0.2s ease-in-out;
+}
+
+.glass-card:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.05);
+}
+
+/* Pulse animation for the timeline */
+@keyframes timelinePulse {
+  0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
+  70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+}
+
+.thumb-pulse {
+  animation: timelinePulse 2s infinite;
+}

@@ -1,0 +1,24 @@
+# Python / FastAPI
+decisiontwin-api/venv/
+decisiontwin-api/__pycache__/
+decisiontwin-api/*.pyc
+decisiontwin-api/mock_personas.json
+*.egg-info/
+.env
+
+# Google Cloud credentials
+gcloud/
+application_default_credentials.json
+service-account*.json
+
+# Next.js / Node
+decisiontwin-ui/.next/
+decisiontwin-ui/node_modules/
+decisiontwin-ui/.env*.local
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+.planning
