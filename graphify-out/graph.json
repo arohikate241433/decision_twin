@@ -1,0 +1,325 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "main.py",
+      "file_type": "code",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L1",
+      "id": "decisiontwin_api_main_py",
+      "community": 0,
+      "norm_label": "main.py"
+    },
+    {
+      "label": "health_check()",
+      "file_type": "code",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L35",
+      "id": "main_health_check",
+      "community": 0,
+      "norm_label": "health_check()"
+    },
+    {
+      "label": "SyntheticDataRequest",
+      "file_type": "code",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L38",
+      "id": "main_syntheticdatarequest",
+      "community": 1,
+      "norm_label": "syntheticdatarequest"
+    },
+    {
+      "label": "BaseModel",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "id": "basemodel",
+      "community": 1,
+      "norm_label": "basemodel"
+    },
+    {
+      "label": "generate_synthetic_data()",
+      "file_type": "code",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L43",
+      "id": "main_generate_synthetic_data",
+      "community": 0,
+      "norm_label": "generate_synthetic_data()"
+    },
+    {
+      "label": "SimulationRequest",
+      "file_type": "code",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L110",
+      "id": "main_simulationrequest",
+      "community": 1,
+      "norm_label": "simulationrequest"
+    },
+    {
+      "label": "simulate_bias()",
+      "file_type": "code",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L116",
+      "id": "main_simulate_bias",
+      "community": 0,
+      "norm_label": "simulate_bias()"
+    },
+    {
+      "label": "ReportRequest",
+      "file_type": "code",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L197",
+      "id": "main_reportrequest",
+      "community": 1,
+      "norm_label": "reportrequest"
+    },
+    {
+      "label": "generate_report()",
+      "file_type": "code",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L204",
+      "id": "main_generate_report",
+      "community": 0,
+      "norm_label": "generate_report()"
+    },
+    {
+      "label": "eslint.config.mjs",
+      "file_type": "code",
+      "source_file": "decisiontwin-ui\\eslint.config.mjs",
+      "source_location": "L1",
+      "id": "decisiontwin_ui_eslint_config_mjs",
+      "community": 4,
+      "norm_label": "eslint.config.mjs"
+    },
+    {
+      "label": "next-env.d.ts",
+      "file_type": "code",
+      "source_file": "decisiontwin-ui\\next-env.d.ts",
+      "source_location": "L1",
+      "id": "decisiontwin_ui_next_env_d_ts",
+      "community": 5,
+      "norm_label": "next-env.d.ts"
+    },
+    {
+      "label": "next.config.ts",
+      "file_type": "code",
+      "source_file": "decisiontwin-ui\\next.config.ts",
+      "source_location": "L1",
+      "id": "decisiontwin_ui_next_config_ts",
+      "community": 6,
+      "norm_label": "next.config.ts"
+    },
+    {
+      "label": "postcss.config.mjs",
+      "file_type": "code",
+      "source_file": "decisiontwin-ui\\postcss.config.mjs",
+      "source_location": "L1",
+      "id": "decisiontwin_ui_postcss_config_mjs",
+      "community": 7,
+      "norm_label": "postcss.config.mjs"
+    },
+    {
+      "label": "layout.tsx",
+      "file_type": "code",
+      "source_file": "decisiontwin-ui\\src\\app\\layout.tsx",
+      "source_location": "L1",
+      "id": "decisiontwin_ui_src_app_layout_tsx",
+      "community": 2,
+      "norm_label": "layout.tsx"
+    },
+    {
+      "label": "RootLayout()",
+      "file_type": "code",
+      "source_file": "decisiontwin-ui\\src\\app\\layout.tsx",
+      "source_location": "L13",
+      "id": "layout_rootlayout",
+      "community": 2,
+      "norm_label": "rootlayout()"
+    },
+    {
+      "label": "page.tsx",
+      "file_type": "code",
+      "source_file": "decisiontwin-ui\\src\\app\\page.tsx",
+      "source_location": "L1",
+      "id": "decisiontwin_ui_src_app_page_tsx",
+      "community": 8,
+      "norm_label": "page.tsx"
+    },
+    {
+      "label": "Providers.tsx",
+      "file_type": "code",
+      "source_file": "decisiontwin-ui\\src\\components\\Providers.tsx",
+      "source_location": "L1",
+      "id": "decisiontwin_ui_src_components_providers_tsx",
+      "community": 3,
+      "norm_label": "providers.tsx"
+    },
+    {
+      "label": "Providers()",
+      "file_type": "code",
+      "source_file": "decisiontwin-ui\\src\\components\\Providers.tsx",
+      "source_location": "L6",
+      "id": "providers_providers",
+      "community": 3,
+      "norm_label": "providers()"
+    },
+    {
+      "label": "useSimulationStore.ts",
+      "file_type": "code",
+      "source_file": "decisiontwin-ui\\src\\store\\useSimulationStore.ts",
+      "source_location": "L1",
+      "id": "decisiontwin_ui_src_store_usesimulationstore_ts",
+      "community": 9,
+      "norm_label": "usesimulationstore.ts"
+    }
+  ],
+  "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L35",
+      "weight": 1.0,
+      "_src": "decisiontwin_api_main_py",
+      "_tgt": "main_health_check",
+      "source": "decisiontwin_api_main_py",
+      "target": "main_health_check",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L38",
+      "weight": 1.0,
+      "_src": "decisiontwin_api_main_py",
+      "_tgt": "main_syntheticdatarequest",
+      "source": "decisiontwin_api_main_py",
+      "target": "main_syntheticdatarequest",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L43",
+      "weight": 1.0,
+      "_src": "decisiontwin_api_main_py",
+      "_tgt": "main_generate_synthetic_data",
+      "source": "decisiontwin_api_main_py",
+      "target": "main_generate_synthetic_data",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L110",
+      "weight": 1.0,
+      "_src": "decisiontwin_api_main_py",
+      "_tgt": "main_simulationrequest",
+      "source": "decisiontwin_api_main_py",
+      "target": "main_simulationrequest",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L116",
+      "weight": 1.0,
+      "_src": "decisiontwin_api_main_py",
+      "_tgt": "main_simulate_bias",
+      "source": "decisiontwin_api_main_py",
+      "target": "main_simulate_bias",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L197",
+      "weight": 1.0,
+      "_src": "decisiontwin_api_main_py",
+      "_tgt": "main_reportrequest",
+      "source": "decisiontwin_api_main_py",
+      "target": "main_reportrequest",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L204",
+      "weight": 1.0,
+      "_src": "decisiontwin_api_main_py",
+      "_tgt": "main_generate_report",
+      "source": "decisiontwin_api_main_py",
+      "target": "main_generate_report",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "inherits",
+      "confidence": "EXTRACTED",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L38",
+      "weight": 1.0,
+      "_src": "main_syntheticdatarequest",
+      "_tgt": "basemodel",
+      "source": "main_syntheticdatarequest",
+      "target": "basemodel",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "inherits",
+      "confidence": "EXTRACTED",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L110",
+      "weight": 1.0,
+      "_src": "main_simulationrequest",
+      "_tgt": "basemodel",
+      "source": "basemodel",
+      "target": "main_simulationrequest",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "inherits",
+      "confidence": "EXTRACTED",
+      "source_file": "decisiontwin-api\\main.py",
+      "source_location": "L197",
+      "weight": 1.0,
+      "_src": "main_reportrequest",
+      "_tgt": "basemodel",
+      "source": "basemodel",
+      "target": "main_reportrequest",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "decisiontwin-ui\\src\\app\\layout.tsx",
+      "source_location": "L13",
+      "weight": 1.0,
+      "_src": "decisiontwin_ui_src_app_layout_tsx",
+      "_tgt": "layout_rootlayout",
+      "source": "decisiontwin_ui_src_app_layout_tsx",
+      "target": "layout_rootlayout",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "decisiontwin-ui\\src\\components\\Providers.tsx",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_src": "decisiontwin_ui_src_components_providers_tsx",
+      "_tgt": "providers_providers",
+      "source": "decisiontwin_ui_src_components_providers_tsx",
+      "target": "providers_providers",
+      "confidence_score": 1.0
+    }
+  ],
+  "hyperedges": []
+}

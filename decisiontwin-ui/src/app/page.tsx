@@ -3,13 +3,35 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useSimulationStore } from '@/store/useSimulationStore';
-import { Play, ShieldAlert, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Play, ShieldAlert, CheckCircle2, RefreshCw, TrendingUp, TrendingDown } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+
+interface SimulationData {
+  status: string;
+  years_simulated: number;
+  metrics: {
+    demographic_parity_difference: number;
+    demographic_parity_ratio: number;
+    approval_rate_overall: number;
+  };
+  bias_flags: Array<{
+    category: string;
+    severity: string;
+    value: number;
+  }>;
+}
+
+interface TimeSeriesPoint {
+  year: number;
+  disparityRatio: number;
+  approvalRate: number;
+  parityDiff: number;
+}
 
 export default function Dashboard() {
   const { yearsToSimulate, setYearsToSimulate, sensitiveFeature, setSensitiveFeature, thresholdAdjustment, setThresholdAdjustment } = useSimulationStore();
-  const [activeTab, setActiveTab] = useState<'simulation' | 'policy'>('simulation');
+  const [timeSeriesData, setTimeSeriesData] = useState<TimeSeriesPoint[]>([]);
 
-  // Trigger synthetic data generation if not exists
   const generateData = useMutation({
     mutationFn: async () => {
       const res = await fetch('http://localhost:8000/generate-synthetic-data', {
@@ -21,8 +43,7 @@ export default function Dashboard() {
     }
   });
 
-  // Fetch metrics dynamically when years slider changes
-  const { data: simulation, isLoading, refetch } = useQuery({
+  const { data: simulation, isLoading } = useQuery<SimulationData>({
     queryKey: ['simulate', yearsToSimulate, sensitiveFeature, thresholdAdjustment],
     queryFn: async () => {
       const res = await fetch('http://localhost:8000/simulate-bias', {
@@ -57,16 +78,36 @@ export default function Dashboard() {
     retry: false,
   });
 
-  // Initialize data on load
+  useEffect(() => {
+    if (simulation) {
+      const newPoint = {
+        year: simulation.years_simulated,
+        disparityRatio: simulation.metrics.demographic_parity_ratio,
+        approvalRate: simulation.metrics.approval_rate_overall * 100,
+        parityDiff: simulation.metrics.demographic_parity_difference
+      };
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTimeSeriesData(prev => {
+        const filtered = prev.filter(p => p.year !== simulation.years_simulated);
+        return [...filtered, newPoint].sort((a, b) => a.year - b.year);
+      });
+    }
+  }, [simulation]);
+
   useEffect(() => {
     generateData.mutate();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const trendDirection = timeSeriesData.length >= 2
+    ? timeSeriesData[timeSeriesData.length - 1].disparityRatio > timeSeriesData[0].disparityRatio
+      ? 'up'
+      : 'down'
+    : null;
+
   return (
-    <main className="min-h-screen p-8 max-w-7xl mx-auto space-y-8 font-sans">
+    <main className="min-h-screen p-8 max-w-7xl mx-auto space-y-8">
       
-      {/* Header section */}
       <header className="flex justify-between items-end border-b border-zinc-800 pb-6">
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">DecisionTwin</h1>
@@ -82,7 +123,6 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-12 gap-8">
         
-        {/* Left Sidebar: Control Panel */}
         <div className="col-span-12 md:col-span-4 space-y-6">
           <div className="glass-card p-6 flex flex-col space-y-6">
             <h2 className="text-xl font-semibold mb-2">Control Panel</h2>
@@ -129,16 +169,34 @@ export default function Dashboard() {
                 onChange={(e) => setThresholdAdjustment(parseFloat(e.target.value))}
                 className="w-full h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
               />
-              <p className="text-xs text-zinc-500">Inject policy changes to see 'What-If' trade-offs.</p>
+              <p className="text-xs text-zinc-500">Inject policy changes to see What-If trade-offs.</p>
             </div>
 
           </div>
+
+          {/* Trend Indicator */}
+          {timeSeriesData.length >= 2 && (
+            <div className="glass-card p-4">
+              <div className="text-sm text-zinc-400 mb-2">Bias Trend</div>
+              <div className="flex items-center gap-2">
+                {trendDirection === 'up' ? (
+                  <TrendingUp className="w-5 h-5 text-emerald-500" />
+                ) : (
+                  <TrendingDown className="w-5 h-5 text-rose-500" />
+                )}
+                <span className={`text-lg font-bold ${trendDirection === 'up' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                  {trendDirection === 'up' ? 'Improving' : 'Worsening'}
+                </span>
+              </div>
+              <div className="text-xs text-zinc-500 mt-1">
+                From {timeSeriesData[0].disparityRatio.toFixed(3)} to {timeSeriesData[timeSeriesData.length - 1].disparityRatio.toFixed(3)}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Right Dashboard Area */}
         <div className="col-span-12 md:col-span-8 flex flex-col space-y-6">
 
-          {/* Metric KPIs */}
           <div className="grid grid-cols-3 gap-6">
             <div className="glass-card p-6">
               <h3 className="text-sm font-medium text-zinc-400">Systemic Disparate Impact</h3>
@@ -146,7 +204,7 @@ export default function Dashboard() {
                 {isLoading ? <div className="h-8 w-24 bg-zinc-800 rounded animate-pulse"></div> : (
                   <>
                     <span className={`text-4xl font-mono font-bold ${
-                      simulation?.metrics?.demographic_parity_ratio < 0.8 ? 'text-rose-600' : 'text-emerald-500'
+                      (simulation?.metrics?.demographic_parity_ratio ?? 1) < 0.8 ? 'text-rose-600' : 'text-emerald-500'
                     }`}>
                       {simulation?.metrics?.demographic_parity_ratio || 0.00}
                     </span>
@@ -171,7 +229,7 @@ export default function Dashboard() {
             </div>
 
             <div className="glass-card p-6">
-              <h3 className="text-sm font-medium text-zinc-400">Global Approval Rate (Profit)</h3>
+              <h3 className="text-sm font-medium text-zinc-400">Global Approval Rate</h3>
               <div className="mt-4 flex items-baseline gap-2">
                  {isLoading ? <div className="h-8 w-24 bg-zinc-800 rounded animate-pulse"></div> : (
                   <>
@@ -184,7 +242,38 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Visual Bias Output / Audit Report Box */}
+          {/* Longitudinal Chart */}
+          {timeSeriesData.length > 0 && (
+            <div className="glass-card p-6">
+              <h3 className="text-lg font-medium border-b border-zinc-800 pb-4 mb-4">Bias Drift Over Time</h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={timeSeriesData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
+                  <XAxis dataKey="year" stroke="#71717a" tickFormatter={(v) => `Y${v}`} />
+                  <YAxis stroke="#71717a" domain={[0, 1]} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '8px' }}
+                    labelFormatter={(v) => `Year ${v}`}
+                    formatter={(value: any) => [typeof value === 'number' ? value.toFixed(4) : value, '']}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="disparityRatio" name="Disparity Ratio" stroke="#ef4444" strokeWidth={2} dot={{ fill: '#ef4444' }} />
+                  <Line type="monotone" dataKey="approvalRate" name="Approval %" stroke="#22c55e" strokeWidth={2} dot={{ fill: '#22c55e' }} />
+                </LineChart>
+              </ResponsiveContainer>
+              <div className="mt-4 flex items-center gap-4 text-xs text-zinc-500">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-rose-500"></div>
+                  <span>Disparity Ratio (lower = worse)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                  <span>Approval Rate %</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="glass-card p-6 flex flex-col min-h-[300px]">
             <div className="flex justify-between">
               <h3 className="text-lg font-medium border-b border-zinc-800 pb-4 w-full">Longitudinal Audit Logs & Bias Flags</h3>
@@ -198,7 +287,7 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <ul className="space-y-4">
-                  {simulation?.bias_flags?.map((flag: any, i: number) => (
+                  {simulation?.bias_flags?.map((flag, i: number) => (
                     <li key={i} className={`p-4 rounded border flex items-start gap-4 ${flag.severity === 'High' ? 'bg-rose-600/10 border-rose-600/30 text-rose-500' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'}`}>
                       {flag.severity === 'High' ? <ShieldAlert className="w-5 h-5 flex-shrink-0 mt-0.5" /> : <CheckCircle2 className="w-5 h-5 flex-shrink-0 mt-0.5" />}
                       <div>
@@ -211,8 +300,7 @@ export default function Dashboard() {
                       </div>
                     </li>
                   ))}
-                  
-                  {/* Generated Audit Snippet */}
+                   
                   <div className="mt-8 p-6 bg-blue-900/10 border border-blue-500/20 rounded font-mono text-sm leading-relaxed text-zinc-300">
                     <h4 className="flex items-center gap-2 text-blue-400 mb-3"><Play className="w-4 h-4"/> Gemini 1.5 Pro Forensic Summary</h4>
                     {isReportLoading ? (

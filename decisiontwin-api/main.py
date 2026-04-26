@@ -1,12 +1,13 @@
 import os
 import json
-from fastapi import FastAPI, HTTPException
+import io
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import vertexai
-from vertexai.generative_models import GenerativeModel, GenerationConfig
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import LabelEncoder
 from fairlearn.metrics import demographic_parity_difference, demographic_parity_ratio
 
@@ -20,16 +21,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "decisiontwin-hackathon")
-LOCATION = "us-central1"
+AI_ENABLED = os.environ.get("AI_ENABLED", "false").lower() == "true"
 
-try:
-    vertexai.init(project=PROJECT_ID, location=LOCATION)
-    gemini_pro = GenerativeModel("gemini-1.5-pro-preview-0409")
-    AI_ENABLED = True
-except Exception as e:
-    print(f"Vertex AI not initialized, falling back to mock data: {e}")
-    AI_ENABLED = False
+if AI_ENABLED:
+    try:
+        import vertexai
+        from vertexai.generative_models import GenerativeModel, GenerationConfig
+        PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT", "decisiontwin-hackathon")
+        LOCATION = "us-central1"
+        vertexai.init(project=PROJECT_ID, location=LOCATION)
+        gemini_pro = GenerativeModel("gemini-1.5-pro-preview-0409")
+    except Exception as e:
+        print(f"Vertex AI not initialized, falling back to mock data: {e}")
+        AI_ENABLED = False
 
 @app.get("/health")
 def health_check():
@@ -47,11 +51,12 @@ def generate_synthetic_data(request: SyntheticDataRequest):
                 {
                     "persona_id": f"p_{i}", 
                     "traits": {
-                        "age_group": "18-24" if i % 3 == 0 else "25-40", 
+                        "age_group": "18-24" if i % 3 == 0 else "25-40" if i % 3 == 1 else "41-60", 
                         "gender": "Male" if i % 2 == 0 else "Female",
-                        "race": "GroupA" if i % 3 == 0 else "GroupB",
-                        "credit_score": 620 + (i % 100), 
-                        "income": 40000 + (i * 100)
+                        "race": "GroupA" if i % 3 == 0 else "GroupB" if i % 3 == 1 else "GroupC",
+                        "credit_score": 580 + (i % 150), 
+                        "income": 35000 + (i * 120),
+                        "location": "Urban" if i % 2 == 0 else "Suburban"
                     }, 
                     "metadata": {"gemini_seed_id": "mock"}
                 } 
@@ -97,7 +102,8 @@ def generate_synthetic_data(request: SyntheticDataRequest):
                         "gender": "Male" if i % 2 == 0 else "Female",
                         "race": "GroupA" if i % 3 == 0 else "GroupB",
                         "credit_score": 620 + (i % 100), 
-                        "income": 40000 + (i * 100)
+                        "income": 40000 + (i * 100),
+                        "location": "Urban" if i % 2 == 0 else "Suburban"
                     }, 
                     "metadata": {"gemini_seed_id": "mock_fallback"}
                 } 
@@ -111,50 +117,42 @@ class SimulationRequest(BaseModel):
     years_to_simulate: int = 5
     sensitive_feature: str = "gender"
     threshold_adjustment: float = 0.0
+    model_type: str = "logistic"
 
-@app.post("/simulate-bias")
-def simulate_bias(request: SimulationRequest):
-    # Phase 3: Core ML Model & Bias Logic
-    # In a real app we'd load this from DB/Vertex context. Using the mock file for the hackathon.
-    try:
-        with open("mock_personas.json", "r") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        raise HTTPException(status_code=400, detail="Generate synthetic data first.")
+def get_model(model_type: str):
+    """Get ML model based on type"""
+    if model_type == "random_forest":
+        return RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42)
+    elif model_type == "decision_tree":
+        return DecisionTreeClassifier(max_depth=5, random_state=42)
+    else:
+        return LogisticRegression(max_iter=1000)
 
-    # Flatten traits into a DataFrame
+def run_simulation(data: list, years: int, sensitive_feature: str, threshold_adjustment: float, model):
+    """Run bias simulation with given parameters"""
     df = pd.DataFrame([item["traits"] for item in data])
-
-    if request.sensitive_feature not in df.columns:
-        raise HTTPException(status_code=400, detail=f"Sensitive feature '{request.sensitive_feature}' not found in dataset. Available: {list(df.columns)}")
-
-    # Encode all string columns to numeric using factorize (handles mixed types safely)
-    for col in df.columns:
-        if df[col].dtype == 'object' or df[col].apply(lambda x: isinstance(x, str)).any():
-            df[col], _ = pd.factorize(df[col])
-
-    # Capture sensitive_vals AFTER encoding so it's always numeric
-    sensitive_vals = df[request.sensitive_feature]
-            
-    # Phase 3: Core ML Model & Bias Logic (Compounding Feedback Loops)
-    # The DecisionTwin magic: As years progress, we simulate mathematical drift 
-    # where the marginalized group (encoded as 0) experiences a slowly increasing threshold penalty.
-    drift_penalty_per_year = 4.0
     
+    if sensitive_feature not in df.columns:
+        raise HTTPException(status_code=400, detail=f"Sensitive feature '{sensitive_feature}' not found in dataset. Available: {list(df.columns)}")
+    
+    for col in df.columns:
+        if not pd.api.types.is_numeric_dtype(df[col]):
+            df[col] = pd.factorize(df[col])[0]
+    
+    sensitive_vals = df[sensitive_feature]
+    
+    drift_penalty_per_year = 4.0
     synthetic_targets = []
     
-    # Normalizing threshold (lower threshold adjustment means easier to get approved)
     for i, row in df.iterrows():
         base_score = float(row['credit_score'])
         
-        # Introduce compounding bias per year for the '0' label group (marginalized)
-        if row[request.sensitive_feature] == 0:
-            year_penalty = request.years_to_simulate * drift_penalty_per_year
+        if row[sensitive_feature] == 0:
+            year_penalty = years * drift_penalty_per_year
         else:
             year_penalty = 0
             
-        # Target threshold: 650 base. Adjust it based on Policy Lab sliders + The compounding bias penalty
-        approval_threshold = 650.0 - request.threshold_adjustment + year_penalty
+        approval_threshold = 650.0 - threshold_adjustment + year_penalty
         
         synthetic_targets.append(1 if base_score > approval_threshold else 0)
         
@@ -163,36 +161,78 @@ def simulate_bias(request: SimulationRequest):
     X = df.drop(columns=['synthetic_target'])
     y = df['synthetic_target']
     
-    # Train mock decision model to learn the biased embedded logic
-    clf = LogisticRegression()
+    clf = model
     clf.fit(X, y)
     predictions = clf.predict(X)
     
-    # Calculate Disparity using Fairlearn
     try:
         dp_diff = demographic_parity_difference(y, predictions, sensitive_features=sensitive_vals)
         dp_ratio = demographic_parity_ratio(y, predictions, sensitive_features=sensitive_vals)
     except:
-        # Fallback if math fails (e.g., all 0 or all 1)
         dp_diff = 0.0
         dp_ratio = 1.0
     
     return {
-        "status": "success",
-        "years_simulated": request.years_to_simulate,
+        "years_simulated": years,
         "metrics": {
             "demographic_parity_difference": round(dp_diff, 4),
             "demographic_parity_ratio": round(dp_ratio, 4),
-            "approval_rate_overall": round(predictions.mean(), 4)
+            "approval_rate_overall": round(predictions.mean(), 4),
+            "accuracy": round(clf.score(X, y), 4) if hasattr(clf, 'score') else 0.75
         },
         "bias_flags": [
             {
-                "category": f"Demographic Disparity on {request.sensitive_feature}",
-                "severity": "High" if dp_ratio < 0.8 else "Low",  # The 80% Rule
+                "category": f"Demographic Disparity on {sensitive_feature}",
+                "severity": "High" if dp_ratio < 0.8 else "Low",
                 "value": round(dp_ratio, 4)
             }
         ]
     }
+
+@app.post("/simulate-bias")
+def simulate_bias(request: SimulationRequest):
+    try:
+        with open("mock_personas.json", "r") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=400, detail="Generate synthetic data first.")
+
+    model = get_model(request.model_type)
+    result = run_simulation(data, request.years_to_simulate, request.sensitive_feature, request.threshold_adjustment, model)
+    
+    return {
+        "status": "success",
+        "model_type": request.model_type,
+        **result
+    }
+
+@app.post("/simulate-all-models")
+def simulate_all_models(request: SimulationRequest):
+    """Run simulation across all available models for comparison"""
+    try:
+        with open("mock_personas.json", "r") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        raise HTTPException(status_code=400, detail="Generate synthetic data first.")
+
+    models = {
+        "logistic": LogisticRegression(max_iter=1000),
+        "random_forest": RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42),
+        "decision_tree": DecisionTreeClassifier(max_depth=5, random_state=42)
+    }
+    
+    results = {}
+    for model_name, model in models.items():
+        results[model_name] = run_simulation(
+            data, 
+            request.years_to_simulate, 
+            request.sensitive_feature, 
+            request.threshold_adjustment, 
+            model
+        )
+    
+    return {"status": "success", "results": results}
+
 
 class ReportRequest(BaseModel):
     demographic_parity_ratio: float
@@ -203,7 +243,10 @@ class ReportRequest(BaseModel):
 @app.post("/generate-report")
 def generate_report(request: ReportRequest):
     if not AI_ENABLED:
-        return {"status": "success", "report": f"Mock AI Review [{request.years_simulated} Years]: The demographic parity ratio of {request.demographic_parity_ratio} indicates systematic disparity. Immediate policy threshold review recommended."}
+        return {
+            "status": "success", 
+            "report": f"Mock AI Review [{request.years_simulated} Years]: The demographic parity ratio of {request.demographic_parity_ratio:.4f} indicates {'systematic disparity requiring immediate policy intervention.' if request.demographic_parity_ratio < 0.8 else 'acceptable bias levels within regulatory thresholds.'} The disparity difference of {request.demographic_parity_difference:.4f} suggests moderate systemic impact on {request.sensitive_feature} demographics. Recommend continuous monitoring and threshold adjustment to maintain compliance."
+        }
         
     prompt = f"""
     Act as an AI Ethics consultant. Given these statistical biases from a {request.years_simulated}-year simulation:
@@ -227,6 +270,59 @@ def generate_report(request: ReportRequest):
             "status": "success", 
             "report": f"Mock AI Review [{request.years_simulated} Years]: Systemic divergence detected. The demographic parity ratio of {request.demographic_parity_ratio} indicates algorithmic polarization. A policy threshold review is strongly recommended to neutralize compounding disparities on {request.sensitive_feature}."
         }
+
+
+@app.post("/ingest-data")
+async def ingest_data(
+    file: UploadFile = File(...),
+    fileType: str = Form(...),
+    schema: str = Form(...)
+):
+    """Ingest CSV, JSON, or Parquet data for bias simulation"""
+    content = await file.read()
+    
+    try:
+        if fileType == "csv":
+            df = pd.read_csv(io.StringIO(content.decode('utf-8')))
+        elif fileType == "json":
+            data = json.loads(content.decode('utf-8'))
+            df = pd.DataFrame(data)
+        elif fileType == "parquet":
+            df = pd.read_parquet(io.BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {fileType}")
+        
+        personas = []
+        for i, row in df.iterrows():
+            persona = {
+                "persona_id": f"ingested_{i}",
+                "traits": row.to_dict(),
+                "metadata": {"source": file.filename, "file_type": fileType}
+            }
+            personas.append(persona)
+        
+        with open("mock_personas.json", "w") as f:
+            json.dump(personas, f)
+        
+        return {
+            "status": "success",
+            "message": f"Successfully ingested {len(personas)} records",
+            "columns": list(df.columns),
+            "row_count": len(df)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to ingest data: {str(e)}")
+
+
+@app.get("/historical-simulations")
+def get_historical_simulations():
+    """Get historical simulation records"""
+    return {
+        "status": "success",
+        "simulations": []
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
