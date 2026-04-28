@@ -1,8 +1,7 @@
 fastapi
 uvicorn
-google-cloud-aiplatform
 pandas
+numpy
 scikit-learn
-fairlearn
 pydantic
 python-multipart

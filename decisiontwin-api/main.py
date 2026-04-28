@@ -8,14 +8,28 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.preprocessing import LabelEncoder
-from fairlearn.metrics import demographic_parity_difference, demographic_parity_ratio
+import numpy as np
+
+# In-memory store replacing mock_personas.json
+persona_store: list = []
+
+def demographic_parity_difference(y_true, y_pred, sensitive_features):
+    y_pred = np.array(y_pred)
+    groups = np.array(sensitive_features)
+    rates = [y_pred[groups == g].mean() for g in np.unique(groups) if (groups == g).sum() > 0]
+    return max(rates) - min(rates) if len(rates) >= 2 else 0.0
+
+def demographic_parity_ratio(y_true, y_pred, sensitive_features):
+    y_pred = np.array(y_pred)
+    groups = np.array(sensitive_features)
+    rates = [y_pred[groups == g].mean() for g in np.unique(groups) if (groups == g).sum() > 0]
+    return min(rates) / max(rates) if len(rates) >= 2 and max(rates) > 0 else 1.0
 
 app = FastAPI(title="DecisionTwin API", description="Provides simulation and AI endpoints for DecisionTwin.")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -45,24 +59,25 @@ class SyntheticDataRequest(BaseModel):
 
 @app.post("/generate-synthetic-data")
 def generate_synthetic_data(request: SyntheticDataRequest):
+    global persona_store
+
     if not AI_ENABLED:
-        with open("mock_personas.json", "w") as f:
-            mock_data = [
-                {
-                    "persona_id": f"p_{i}", 
-                    "traits": {
-                        "age_group": "18-24" if i % 3 == 0 else "25-40" if i % 3 == 1 else "41-60", 
-                        "gender": "Male" if i % 2 == 0 else "Female",
-                        "race": "GroupA" if i % 3 == 0 else "GroupB" if i % 3 == 1 else "GroupC",
-                        "credit_score": 580 + (i % 150), 
-                        "income": 35000 + (i * 120),
-                        "location": "Urban" if i % 2 == 0 else "Suburban"
-                    }, 
-                    "metadata": {"gemini_seed_id": "mock"}
-                } 
-                for i in range(request.persona_count)
-            ]
-            json.dump(mock_data, f)
+        mock_data = [
+            {
+                "persona_id": f"p_{i}",
+                "traits": {
+                    "age_group": "18-24" if i % 3 == 0 else "25-40" if i % 3 == 1 else "41-60",
+                    "gender": "Male" if i % 2 == 0 else "Female",
+                    "race": "GroupA" if i % 3 == 0 else "GroupB" if i % 3 == 1 else "GroupC",
+                    "credit_score": 580 + (i % 150),
+                    "income": 35000 + (i * 120),
+                    "location": "Urban" if i % 2 == 0 else "Suburban"
+                },
+                "metadata": {"gemini_seed_id": "mock"}
+            }
+            for i in range(request.persona_count)
+        ]
+        persona_store = mock_data
         return {"status": "success", "source": "mock", "data": mock_data}
 
     prompt = f"""
@@ -75,41 +90,34 @@ def generate_synthetic_data(request: SyntheticDataRequest):
 
     Format the output strictly as a JSON array where each object contains a 'persona_id' and 'traits' dictionary.
     """
-    
+
     try:
         response = gemini_pro.generate_content(
             prompt,
-            generation_config=GenerationConfig(
-                temperature=0.7,
-                response_mime_type="application/json"
-            )
+            generation_config=GenerationConfig(temperature=0.7, response_mime_type="application/json")
         )
-        
         result_json = json.loads(response.text)
-        with open("mock_personas.json", "w") as f:
-            json.dump(result_json, f)
-            
+        persona_store = result_json
         return {"status": "success", "source": "gemini", "data": result_json[:5], "total": len(result_json)}
-        
+
     except Exception as e:
-        print(f"Vertex AI not initialized, falling back to mock data: {e}")
-        with open("mock_personas.json", "w") as f:
-            mock_data = [
-                {
-                    "persona_id": f"p_{i}", 
-                    "traits": {
-                        "age_group": "18-24" if i % 3 == 0 else "25-40", 
-                        "gender": "Male" if i % 2 == 0 else "Female",
-                        "race": "GroupA" if i % 3 == 0 else "GroupB",
-                        "credit_score": 620 + (i % 100), 
-                        "income": 40000 + (i * 100),
-                        "location": "Urban" if i % 2 == 0 else "Suburban"
-                    }, 
-                    "metadata": {"gemini_seed_id": "mock_fallback"}
-                } 
-                for i in range(request.persona_count)
-            ]
-            json.dump(mock_data, f)
+        print(f"Vertex AI error, falling back to mock data: {e}")
+        mock_data = [
+            {
+                "persona_id": f"p_{i}",
+                "traits": {
+                    "age_group": "18-24" if i % 3 == 0 else "25-40",
+                    "gender": "Male" if i % 2 == 0 else "Female",
+                    "race": "GroupA" if i % 3 == 0 else "GroupB",
+                    "credit_score": 620 + (i % 100),
+                    "income": 40000 + (i * 100),
+                    "location": "Urban" if i % 2 == 0 else "Suburban"
+                },
+                "metadata": {"gemini_seed_id": "mock_fallback"}
+            }
+            for i in range(request.persona_count)
+        ]
+        persona_store = mock_data
         return {"status": "success", "source": "mock_fallback", "data": mock_data[:5], "total": len(mock_data)}
 
 
@@ -120,7 +128,6 @@ class SimulationRequest(BaseModel):
     model_type: str = "logistic"
 
 def get_model(model_type: str):
-    """Get ML model based on type"""
     if model_type == "random_forest":
         return RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42)
     elif model_type == "decision_tree":
@@ -129,49 +136,40 @@ def get_model(model_type: str):
         return LogisticRegression(max_iter=1000)
 
 def run_simulation(data: list, years: int, sensitive_feature: str, threshold_adjustment: float, model):
-    """Run bias simulation with given parameters"""
     df = pd.DataFrame([item["traits"] for item in data])
-    
+
     if sensitive_feature not in df.columns:
-        raise HTTPException(status_code=400, detail=f"Sensitive feature '{sensitive_feature}' not found in dataset. Available: {list(df.columns)}")
-    
+        raise HTTPException(status_code=400, detail=f"Sensitive feature '{sensitive_feature}' not found. Available: {list(df.columns)}")
+
     for col in df.columns:
         if not pd.api.types.is_numeric_dtype(df[col]):
             df[col] = pd.factorize(df[col])[0]
-    
+
     sensitive_vals = df[sensitive_feature]
-    
     drift_penalty_per_year = 4.0
     synthetic_targets = []
-    
+
     for i, row in df.iterrows():
         base_score = float(row['credit_score'])
-        
-        if row[sensitive_feature] == 0:
-            year_penalty = years * drift_penalty_per_year
-        else:
-            year_penalty = 0
-            
+        year_penalty = years * drift_penalty_per_year if row[sensitive_feature] == 0 else 0
         approval_threshold = 650.0 - threshold_adjustment + year_penalty
-        
         synthetic_targets.append(1 if base_score > approval_threshold else 0)
-        
+
     df['synthetic_target'] = synthetic_targets
-    
     X = df.drop(columns=['synthetic_target'])
     y = df['synthetic_target']
-    
+
     clf = model
     clf.fit(X, y)
     predictions = clf.predict(X)
-    
+
     try:
         dp_diff = demographic_parity_difference(y, predictions, sensitive_features=sensitive_vals)
         dp_ratio = demographic_parity_ratio(y, predictions, sensitive_features=sensitive_vals)
     except:
         dp_diff = 0.0
         dp_ratio = 1.0
-    
+
     return {
         "years_simulated": years,
         "metrics": {
@@ -191,46 +189,29 @@ def run_simulation(data: list, years: int, sensitive_feature: str, threshold_adj
 
 @app.post("/simulate-bias")
 def simulate_bias(request: SimulationRequest):
-    try:
-        with open("mock_personas.json", "r") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        raise HTTPException(status_code=400, detail="Generate synthetic data first.")
+    if not persona_store:
+        # Auto-generate data if store is empty instead of erroring
+        generate_synthetic_data(SyntheticDataRequest())
 
     model = get_model(request.model_type)
-    result = run_simulation(data, request.years_to_simulate, request.sensitive_feature, request.threshold_adjustment, model)
-    
-    return {
-        "status": "success",
-        "model_type": request.model_type,
-        **result
-    }
+    result = run_simulation(persona_store, request.years_to_simulate, request.sensitive_feature, request.threshold_adjustment, model)
+    return {"status": "success", "model_type": request.model_type, **result}
 
 @app.post("/simulate-all-models")
 def simulate_all_models(request: SimulationRequest):
-    """Run simulation across all available models for comparison"""
-    try:
-        with open("mock_personas.json", "r") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        raise HTTPException(status_code=400, detail="Generate synthetic data first.")
+    if not persona_store:
+        generate_synthetic_data(SyntheticDataRequest())
 
     models = {
         "logistic": LogisticRegression(max_iter=1000),
         "random_forest": RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42),
         "decision_tree": DecisionTreeClassifier(max_depth=5, random_state=42)
     }
-    
+
     results = {}
     for model_name, model in models.items():
-        results[model_name] = run_simulation(
-            data, 
-            request.years_to_simulate, 
-            request.sensitive_feature, 
-            request.threshold_adjustment, 
-            model
-        )
-    
+        results[model_name] = run_simulation(persona_store, request.years_to_simulate, request.sensitive_feature, request.threshold_adjustment, model)
+
     return {"status": "success", "results": results}
 
 
@@ -244,30 +225,27 @@ class ReportRequest(BaseModel):
 def generate_report(request: ReportRequest):
     if not AI_ENABLED:
         return {
-            "status": "success", 
+            "status": "success",
             "report": f"Mock AI Review [{request.years_simulated} Years]: The demographic parity ratio of {request.demographic_parity_ratio:.4f} indicates {'systematic disparity requiring immediate policy intervention.' if request.demographic_parity_ratio < 0.8 else 'acceptable bias levels within regulatory thresholds.'} The disparity difference of {request.demographic_parity_difference:.4f} suggests moderate systemic impact on {request.sensitive_feature} demographics. Recommend continuous monitoring and threshold adjustment to maintain compliance."
         }
-        
+
     prompt = f"""
     Act as an AI Ethics consultant. Given these statistical biases from a {request.years_simulated}-year simulation:
     - Sensitive Feature: {request.sensitive_feature}
     - Demographic Parity Ratio (80% rule): {request.demographic_parity_ratio}
     - Demographic Parity Difference: {request.demographic_parity_difference}
     
-    Write a concise 1-paragraph summary explaining the business impact and systemic risk to non-technical executives. 
+    Write a concise 1-paragraph summary explaining the business impact and systemic risk to non-technical executives.
     Be direct, professional, and forensic.
     """
-    
+
     try:
-        response = gemini_pro.generate_content(
-            prompt,
-            generation_config=GenerationConfig(temperature=0.4)
-        )
+        response = gemini_pro.generate_content(prompt, generation_config=GenerationConfig(temperature=0.4))
         return {"status": "success", "report": response.text.strip()}
     except Exception as e:
         print(f"Vertex AI report error: {e}. Falling back to mock report.")
         return {
-            "status": "success", 
+            "status": "success",
             "report": f"Mock AI Review [{request.years_simulated} Years]: Systemic divergence detected. The demographic parity ratio of {request.demographic_parity_ratio} indicates algorithmic polarization. A policy threshold review is strongly recommended to neutralize compounding disparities on {request.sensitive_feature}."
         }
 
@@ -278,9 +256,9 @@ async def ingest_data(
     fileType: str = Form(...),
     schema: str = Form(...)
 ):
-    """Ingest CSV, JSON, or Parquet data for bias simulation"""
+    global persona_store
     content = await file.read()
-    
+
     try:
         if fileType == "csv":
             df = pd.read_csv(io.StringIO(content.decode('utf-8')))
@@ -291,37 +269,32 @@ async def ingest_data(
             df = pd.read_parquet(io.BytesIO(content))
         else:
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {fileType}")
-        
-        personas = []
-        for i, row in df.iterrows():
-            persona = {
+
+        personas = [
+            {
                 "persona_id": f"ingested_{i}",
                 "traits": row.to_dict(),
                 "metadata": {"source": file.filename, "file_type": fileType}
             }
-            personas.append(persona)
-        
-        with open("mock_personas.json", "w") as f:
-            json.dump(personas, f)
-        
+            for i, row in df.iterrows()
+        ]
+
+        persona_store = personas
+
         return {
             "status": "success",
             "message": f"Successfully ingested {len(personas)} records",
             "columns": list(df.columns),
             "row_count": len(df)
         }
-        
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to ingest data: {str(e)}")
 
 
 @app.get("/historical-simulations")
 def get_historical_simulations():
-    """Get historical simulation records"""
-    return {
-        "status": "success",
-        "simulations": []
-    }
+    return {"status": "success", "simulations": []}
 
 
 if __name__ == "__main__":
